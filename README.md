@@ -2,7 +2,7 @@
 
 ## Note to the Reader
 
-This project is **in-progress** and will not be functional until late January 2023.
+This project is **in-progress** and will not be functional until late May 2024.
 
 ## Purpose
 
@@ -12,6 +12,6 @@ This Shiny app is designed to answer the 'why?'s behind your fitness journey. Us
 
 ## TODO
 - App Preview 
-- Setup (include notes on Google forms / sheets data collection)
+- Setup (sheets data collection)
 - Note on Statistical Analysis
 - Note on Regression Analysis
