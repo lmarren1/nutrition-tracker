@@ -4,6 +4,7 @@
 
 library(tidyverse)
 library(ggplot2)
+library(plotly)
 
 ################################################################################
 ## Process CSVs
@@ -23,6 +24,7 @@ performance_data = read.csv(file = "data/health_proj_performance_data.csv",
 ################################################################################
 
 biometric_data = data.frame(date = seq.Date(from = as.Date("2024/5/14"), by = 1, length.out = 30),
+                            day = 1:30,
                             weight_lbs = seq(from = 180, to = 190, length.out = 30),
                             muscle_mass_lbs = seq(from = 145, to = 170, length.out = 30),
                             bone_mass_lbs = seq(from = 7, to = 9, length.out = 30),
@@ -62,10 +64,41 @@ View(performance_data)
 ## moving average
 ma <- function(x, n = 5){stats::filter(x, rep(1 / n, n), sides = 2)}
 
+## graph over time
+time_series_graph = function(data = biometric_data, y = biometric_data$weight_lbs,
+                      title = "Weight Over Time", y_label = "Weight (lbs)") {
+  ggplot(data = data) +
+    geom_point(mapping = aes(x = date, y = y),
+               color = "darkblue",
+               size = 2) +
+    labs(title = title,
+         x = "Date (yyyy-mm-dd)",
+         y = y_label) +
+    scale_x_date(date_breaks = "3 days") +
+    scale_y_continuous(n.breaks = 7) +
+    theme(plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.subtitle = element_text(face = "italic", hjust = 0.5),
+          axis.text.x = element_text(angle = 30))
+}
+
+## Change Over Time
+chg_over_time = function(x, days = 1) {
+  return(x - lag(x, n = days, default = first(x)))
+}
+
+## Average Over Time
+avg_over_time = function(x, days = 1) {
+  for (i in seq(from = 1, to = days)) {
+    y = y + lag(x, n = i, default = first(x))
+  }
+  return(y/7)
+}
+
 ################################################################################
 ## Create analysis dfs
 ################################################################################
 
+  ## add body_fat & percentages
 biometric_data = biometric_data |>
   mutate(body_fat_lbs = (weight_lbs - muscle_mass_lbs - bone_mass_lbs),
          body_fat_pct = (body_fat_lbs/weight_lbs),
@@ -73,40 +106,39 @@ biometric_data = biometric_data |>
          bone_mass_pct = (bone_mass_lbs/weight_lbs))
 View(biometric_data)
 
+  ## **NEW DF** <- add dly_chg, wkly_chg, cum_chg, wkly_avg
 biometric_analysis_data = biometric_data |>
-  mutate(dly_chg_body_fat_lbs = body_fat_lbs - lag(body_fat_lbs, default = first(body_fat_lbs)),
-         wkly_chg_body_fat_lbs = body_fat_lbs - lag(body_fat_lbs, n = 7, default = first(body_fat_lbs)),
+  ## weight
+  mutate(dly_chg_weight_lbs = chg_over_time(weight_lbs),
+         wkly_chg_weight_lbs = chg_over_time(weight_lbs, days = 7),
+         cume_chg_weight_lbs = cumsum(weight_lbs),
+         wkly_avg_weight_lbs = avg_over_time(weight_lbs, days = 7)) |>
+  ## body_fat_lbs
+  mutate(dly_chg_body_fat_lbs = chg_over_time(body_fat_lbs),
+         wkly_chg_body_fat_lbs = chg_over_time(body_fat_lbs, days = 7),
          cume_chg_body_fat_lbs = cumsum(dly_chg_body_fat_lbs),
-         wkly_avg_body_fat_lbs = ma(body_fat_lbs, n = 7)
-         )
-
-
-  mutate(dly_chg_body_fat_pct = body_fat_pct - lag(body_fat_pct, default = first(body_fat_pct)),
-         wkly_chg_body_fat_pct = body_fat_lbs - lag(body_fat_lbs, n = 7, default = first(body_fat_lbs)),
-         cume_chg_body_fat_pct,
-         wkly_avg_body_fat_pct)
-
+         wkly_avg_body_fat_lbs = avg_over_time(body_fat_lbs, days = 7)) |>
+  ## body_fat_pct
+  mutate(dly_chg_body_fat_pct = chg_over_time(body_fat_pct),
+         wkly_chg_body_fat_pct = chg_over_time(body_fat_pct, days = 7),
+         cume_chg_body_fat_pct = cumsum(dly_chg_body_fat_pct),
+         wkly_avg_body_fat_pct = avg_over_time(body_fat_pct, days = 7)) |>
+  ## muscle_mass_lbs
+  mutate(dly_chg_muscle_mass_lbs = chg_over_time(muscle_mass_lbs),
+         wkly_chg_muscle_mass_lbs = chg_over_time(muscle_mass_lbs, days = 7),
+         cume_chg_muscle_mass_lbs = cumsum(muscle_mass_lbs),
+         wkly_avg_muscle_mass_lbs = avg_over_time(muscle_mass_lbs, days = 7)) |>
+  ## muscle_mass_pct
+  mutate(dly_chg_muscle_mass_pct = chg_over_time(muscle_mass_pct),
+         wkly_chg_muscle_mass_pct = chg_over_time(muscle_mass_pct, days = 7),
+         cume_chg_muscle_mass_pct = cumsum(muscle_mass_pct),
+         wkly_avg_muscle_mass_pct = avg_over_time(muscle_mass_pct, days = 7)) |>
+  ## sleep_hrs
+  mutate(dly_chg_sleep_hrs = chg_over_time(sleep_hrs),
+         wkly_chg_sleep_hrs = chg_over_time(sleep_hrs, days = 7),
+         cume_avg_sleep_hrs = cumsum(dly_chg_sleep_hrs),
+         wkly_avg_sleep_hrs = avg_over_time(sleep_hrs, days = 7))
 View(biometric_analysis_data)
-         wkly_chg_body_fat_lbs,
-         cume_chg_body_fat_lbs,
-         wkly_avg_body_fat_lbs) |>
-  mutate(dly_chg_body_fat_pct,
-         wkly_chg_body_fat_pct,
-         cume_chg_body_fat_pct,
-         wkly_avg_body_fat_pct) |>
-  mutate(dly_chg_muscle_mass_lbs,
-         wkly_chg_muscle_mass_lbs,
-         cume_chg_muscle_mass_lbs,
-         wkly_avg_muscle_mass_lbs) |>
-  mutate(dly_chg_muscle_mass_pct,
-         wkly_chg_muscle_mass_pct,
-         cume_chg_muscle_mass_pct) |>
-  mutate(dly_chg_sleep_hrs,
-         wkly_chg_sleep_hrs,
-         wkly_avg_sleep_hrs,
-         cume_avg_sleep_hrs)
-  )
-
 
 nutrition_data = nutrition_data |>
   mutate(unsat_fat_g = (total_fat_g - sat_fat_g),
@@ -133,78 +165,34 @@ View(full_dataset)
 ## biometric_data
 
   ## Weight Over Time
-ggplot(data = biometric_data) +
-  geom_point(mapping = aes(x = date, y = weight_lbs),
-             color = "darkblue",
-             size = 2) +
-  labs(title = "Weight Over Time",
-       x = "Date (yyyy-mm-dd)",
-       y = "Weight (lbs)") +
-  scale_x_date(date_breaks = "3 days") +
-  scale_y_continuous(n.breaks = 7) +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(face = "italic", hjust = 0.5),
-        axis.text.x = element_text(angle = 30))
+time_series_graph() |>
+  ggplotly()
 
   ## Body Fat Over Time
-ggplot(data = biometric_data) +
-  geom_point(mapping = aes(x = date, y = body_fat_lbs),
-             color = "darkred",
-             size = 2) +
-  labs(title = "Body Fat Over Time",
-       x = "Date (yyyy-mm-dd)",
-       y = "Body Fat (lbs)",
-       ) +
-  scale_x_date(date_breaks = "3 days") +
-  scale_y_continuous(n.breaks = 7) +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(face = "italic", hjust = 0.5),
-        axis.text.x = element_text(angle = 30))
+time_series_graph(y = biometric_data$body_fat_lbs,
+           title = "Body Fat Over Time", y_label = "Body Fat (lbs)") |>
+  ggplotly()
 
   ## Muscle Mass Over Time
-ggplot(data = biometric_data) +
-  geom_point(mapping = aes(x = date, y = muscle_mass_lbs),
-             color = "darkgreen",
-             size = 2) +
-  labs(title = "Muscle Mass Over Time",
-       x = "Date (yyyy-mm-dd)",
-       y = "Muscle Mass (lbs)",
-  ) +
-  scale_x_date(date_breaks = "3 days") +
-  scale_y_continuous(n.breaks = 7) +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(face = "italic", hjust = 0.5),
-        axis.text.x = element_text(angle = 30))
+time_series_graph(y = biometric_data$muscle_mass_lbs,
+           title = "Muscle Mass Over Time", y_label = "Muscle Mass (lbs)") |>
+  ggplotly()
 
   ## Bone Mass Over Time
-ggplot(data = biometric_data) +
-  geom_point(mapping = aes(x = date, y = bone_mass_lbs),
-             color = "darkred",
-             size = 2) +
-  labs(title = "Bone Mass Over Time",
-       x = "Date (yyyy-mm-dd)",
-       y = "Bone Mass (lbs)",
-  ) +
-  scale_x_date(date_breaks = "3 days") +
-  scale_y_continuous(n.breaks = 7) +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(face = "italic", hjust = 0.5),
-        axis.text.x = element_text(angle = 30))
+time_series_graph(y = biometric_data$bone_mass_lbs,
+           title = "Bone Mass Over Time", y_label = "Bone Mass (lbs)") |>
+  ggplotly()
 
   ## Sleep Over Time
-ggplot(data = biometric_data) +
-  geom_point(mapping = aes(x = date, y = sleep_hrs),
-             color = "darkred",
-             size = 2) +
-  labs(title = "Sleep Over Time",
-       x = "Date (yyyy-mm-dd)",
-       y = "Sleep (hrs)",
-  ) +
-  scale_x_date(date_breaks = "3 days") +
-  scale_y_continuous(n.breaks = 7) +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(face = "italic", hjust = 0.5),
-        axis.text.x = element_text(angle = 30))
+time_series_graph(y = biometric_data$sleep_hrs,
+           title = "Sleep Over Time", y_label = "Sleep (hrs)") |>
+  ggplotly()
+
+graph = time_series_graph(data = biometric_analysis_data, y = biometric_analysis_data$dly_chg_weight_lbs) +
+  geom_point(mapping = aes(x = date, y = dly_chg_body_fat_lbs))
+  ggplotly(graph)
+
+
 
 ################################################################################
 ## Regression Analysis
